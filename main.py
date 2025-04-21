@@ -3,6 +3,7 @@ from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import hashlib
 import time
+import asyncio  # <-- Import manquant ajouté
 
 # Initialise l'application
 app = FastAPI(title="DocVox API")
@@ -27,6 +28,11 @@ async def fake_ai_processing(content: bytes, sentences: int) -> dict:
         "summary_file": "resume.txt"
     }
 
+async def expire_cache_key(key: str, delay: int = 60):
+    """Supprime la clé du cache après 'delay' secondes"""
+    await asyncio.sleep(delay)
+    cache.pop(key, None)
+
 @app.post("/process/")
 async def process_file(
     file: UploadFile = File(...),  # Reçoit le fichier
@@ -47,8 +53,8 @@ async def process_file(
         processing_time = time.time() - start_time
         
         # 3. Mise en cache (60 secondes)
-        cache[cache_key] = result
-        background_tasks.add_task(lambda: cache.pop(cache_key, None))
+        cache[cache_key] = {**result, "processing_time": processing_time}
+        background_tasks.add_task(expire_cache_key, cache_key, 60)
         
         return {**result, "processing_time": processing_time}
         
